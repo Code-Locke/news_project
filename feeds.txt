@@ -1,0 +1,14 @@
+http://feeds.bbci.co.uk/news/rss.xml
+http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml
+https://thehill.com/homenews/feed/
+https://www.cnbc.com/id/15837362/device/rss/rss.html
+https://www.cnbc.com/id/100003114/device/rss/rss.html
+https://www.nytimes.com/services/xml/rss/nyt/World.xml
+https://www.nytimes.com/services/xml/rss/nyt/US.xml
+http://www.vox.com/rss/index.xml
+http://feeds.nbcnews.com/nbcnews/public/news
+http://reddit.com/r/formula1/.rss
+https://www.the-race.com/rss/
+https://www.motorsport.com/rss/f1/news/
+https://theonion.com/feed/
+https://status.claude.com/history.atom
