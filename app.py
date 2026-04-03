@@ -1,5 +1,7 @@
 import sqlite3
 import threading
+#logging functionality added
+import logging
 import asyncio
 import tomllib
 from datetime import datetime
@@ -60,6 +62,9 @@ def _run_aggregator():
     try:
         all_feeds_data = asyncio.run(fetch_all(feed_urls, conn, max_workers, summary_limit))
     except Exception:
+        #This was eating up the news_at_12 script's errors.
+        #If the script dies, no errors would be shown.
+        logging.exception("We've got some news for you, coming right up, news_at_12 died")
         all_feeds_data = []
 
     elapsed     = time.monotonic() - t_start
