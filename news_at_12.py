@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import asyncio
 import feedparser
 import hashlib
@@ -7,30 +6,24 @@ import logging
 import re
 import sqlite3
 import time
+import tomllib
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-
-#Configs
-FEEDS_FILE        = 'feeds.txt'
-DB_FILE           = 'headlines.db'
-mococo = datetime.now().strftime('%m%d%y_%H')
-HTML_OUTPUT       = f'News_Report_{mococo}.html'
-JSON_OUTPUT       = f'News_Report_{mococo}.json'
-LOG_FILE          = 'news_at_12.log'
-ERROR_LOG_FILE    = 'news_errors.log' 
-LOG_MAX_BYTES     = 1_000_000         
-LOG_BACKUP_COUNT  = 3                 
-SUMMARY_LIMIT     = 300 
-MAX_WORKERS       = 10
-FETCH_TIMEOUT     = 15 #Not sure about this
-AUTO_OPEN_BROWSER = True
+# New UPDATE!!! configuration is now stored in config.toml
+#I chose TOML because I wanted to keep things as 'native' as possible
+#The date HTML output is also deprecated due to me moving to having
+#A Flask app as a proper frontend, no need for headlines of the hour
+#Also cleaned up some other codes and indentations?
+#Added Labels
+CONFIG_FILE = 'config.toml'
 
 
-def setup_logging():
+#Logging
+def setup_logging(log_file, error_log_file, log_max_bytes, log_backup_count):
     log = logging.getLogger()
     log.setLevel(logging.DEBUG)
 
@@ -40,23 +33,21 @@ def setup_logging():
     )
     fmt_console = logging.Formatter('%(levelname)-8s  %(message)s')
 
-    
     fh = RotatingFileHandler(
-        LOG_FILE, maxBytes=LOG_MAX_BYTES,
-        backupCount=LOG_BACKUP_COUNT, encoding='utf-8',
+        log_file, maxBytes=log_max_bytes,
+        backupCount=log_backup_count, encoding='utf-8',
     )
     fh.setLevel(logging.INFO)
     fh.setFormatter(fmt_file)
 
-    
+
     eh = RotatingFileHandler(
-        ERROR_LOG_FILE, maxBytes=LOG_MAX_BYTES,
-        backupCount=LOG_BACKUP_COUNT, encoding='utf-8',
+        error_log_file, maxBytes=log_max_bytes,
+        backupCount=log_backup_count, encoding='utf-8',
     )
     eh.setLevel(logging.ERROR)
     eh.setFormatter(fmt_file)
 
-    
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
     ch.setFormatter(fmt_console)
@@ -66,8 +57,8 @@ def setup_logging():
     log.addHandler(ch)
 
 
+#Utilities
 def strip_html(text):
-    """Remove HTML tags from a string."""
     return re.sub(r'<[^>]+>', '', text or '').strip()
 
 
@@ -75,7 +66,7 @@ def url_hash(url):
     return hashlib.sha256(url.encode('utf-8')).hexdigest()
 
 
-def parse_date(entry):
+def parse_date(entry):    
     for attr in ('published_parsed', 'updated_parsed'):
         val = getattr(entry, attr, None)
         if val:
@@ -92,18 +83,46 @@ def pretty_date(iso):
         return iso
 
 
-def read_urls(filename):
+def load_config(filename):
     try:
-        with open(filename, 'r') as f:
-            urls = [line.strip() for line in f
-                    if line.strip() and not line.strip().startswith('#')]
-        return urls
+        with open(filename, 'rb') as f:
+            config = tomllib.load(f)
+        
+        if 'settings' not in config:
+            logging.error(f"Missing [settings] section in '{filename}'")
+            return None
+        
+        if 'feeds' not in config:
+            logging.error(f"Missing [[feeds]] section in '{filename}'")
+            return None
+        
+        
+        all_feeds = config.get('feeds', [])
+        enabled_feeds = [
+            feed for feed in all_feeds 
+            if feed.get('enabled', True)
+        ]
+        
+        if not enabled_feeds:
+            logging.warning(f"No enabled feeds found in '{filename}'")
+        
+        
+        return {
+            'settings': config['settings'],
+            'feeds': enabled_feeds,
+        }
+        
     except FileNotFoundError:
-        logging.error(f"Could not find feeds file: '{filename}'")
-        return []
+        logging.error(f"Could not find config file: '{filename}'")
+        return None
+    except tomllib.TOMLDecodeError as e:
+        logging.error(f"Invalid TOML syntax in '{filename}': {e}")
+        return None
+
 
 
 def get_db(db_file):
+    
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')
@@ -153,7 +172,7 @@ def get_db(db_file):
 
 def log_run_summary(conn, started_at, finished_at, elapsed_sec,
                     feeds_fetched, feeds_failed, articles_total, articles_new):
-    
+#
     with conn:
         conn.execute("""
             INSERT INTO runs
@@ -169,6 +188,7 @@ def log_run_summary(conn, started_at, finished_at, elapsed_sec,
 
 
 def upsert_feed(conn, url, title, site_link):
+#
     now = datetime.now().isoformat()
     conn.execute("""
         INSERT INTO feeds (url, title, site_link, first_seen, last_fetched)
@@ -212,11 +232,13 @@ def upsert_headline(conn, feed_id, title, url, published, summary):
         ).fetchone()
         return dict(row), True
 
-def fetch_feed(feed_url):
+
+def fetch_feed(feed_url, summary_limit=300):
+    
     t_start = time.monotonic()
     try:
         feed = feedparser.parse(feed_url, request_headers={
-            'tekLocke': 'news_at_12/2.0',
+            'User-Agent': 'news_at_12/1.5',
         })
     except Exception as exc:
         logging.error(f"Failed to fetch {feed_url}: {exc}")
@@ -237,8 +259,8 @@ def fetch_feed(feed_url):
         published = parse_date(entry)
         raw_sum   = entry.get('summary', entry.get('description', ''))
         summary   = strip_html(raw_sum)
-        if len(summary) > SUMMARY_LIMIT:
-            summary = summary[:SUMMARY_LIMIT].rsplit(' ', 1)[0] + '...'
+        if len(summary) > summary_limit:
+            summary = summary[:summary_limit].rsplit(' ', 1)[0] + '...'
 
         raw_entries.append({
             'title':     title,
@@ -255,11 +277,13 @@ def fetch_feed(feed_url):
         'raw_entries': raw_entries,
     }
 
+
+
 def store_feed(conn, raw):
     new_count = 0
     entries   = []
 
-    with conn:
+    with conn: 
         feed_id = upsert_feed(conn, raw['feed_url'], raw['feed_title'], raw['feed_link'])
 
         for e in raw['raw_entries']:
@@ -289,14 +313,18 @@ def store_feed(conn, raw):
         'entries':    entries,
     }
 
-async def fetch_all(feed_urls, conn):
-    
-    #loop = asyncio.get_event_loop()
-    loop = asyncio.get_running_loop()
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+
+async def fetch_all(feed_urls, conn, max_workers=10, summary_limit=300):
+    
+    loop = asyncio.get_event_loop()
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        from functools import partial
+        fetch_with_limit = partial(fetch_feed, summary_limit=summary_limit)
+        
         tasks = [
-            loop.run_in_executor(pool, fetch_feed, url)
+            loop.run_in_executor(pool, fetch_with_limit, url)
             for url in feed_urls
         ]
         raw_results = await asyncio.gather(*tasks)
@@ -308,6 +336,8 @@ async def fetch_all(feed_urls, conn):
             all_feeds.append(feed_data)
 
     return all_feeds
+
+
 
 def export_json(all_feeds, filename):
     payload = {
@@ -338,8 +368,7 @@ def export_json(all_feeds, filename):
     logging.info(f"JSON saved -> {filename}")
 
 
-def build_html(all_feeds, elapsed_seconds):
-
+def build_html(all_feeds, elapsed_seconds, db_file="headlines.db"):
     feed_cards = ''
     for feed in all_feeds:
         entries_html = ''
@@ -394,7 +423,7 @@ def build_html(all_feeds, elapsed_seconds):
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RSS Headlines</title>
+  <title> Headlines</title>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
@@ -491,7 +520,7 @@ def build_html(all_feeds, elapsed_seconds):
 </head>
 <body>
   <header>
-    <h1>RSS Headlines</h1>
+    <h1> Headlines</h1>
     <p>
       Generated {generated}
       &nbsp;&middot;&nbsp; {len(all_feeds)} feeds
@@ -503,39 +532,62 @@ def build_html(all_feeds, elapsed_seconds):
 
   {feed_cards}
 
-  <footer>Generated by rss_summarizer.py &nbsp;&middot;&nbsp; DB: {DB_FILE}</footer>
+  <footer>Generated by news_at_12.py &nbsp;&middot;&nbsp; DB: {db_file}</footer>
 </body>
 </html>"""
 
 
-def save_html(all_feeds, filename, elapsed_seconds):
+def save_html(all_feeds, filename, elapsed_seconds, db_file, auto_open_browser=True):
     with open(filename, 'w', encoding='utf-8') as fh:
-        fh.write(build_html(all_feeds, elapsed_seconds))
+        fh.write(build_html(all_feeds, elapsed_seconds, db_file))
     logging.info(f"HTML saved -> {filename}")
-    if AUTO_OPEN_BROWSER:
+    if auto_open_browser:
         webbrowser.open(Path(filename).resolve().as_uri())
 
-def main():
-    setup_logging()
-    logging.info("=" * 50)
-    logging.info(f"Good Morning World, I am News_at_12,and I am here for you and it's {mococo}")
 
-    feed_urls = read_urls(FEEDS_FILE)
-    if not feed_urls:
-        logging.error(f"No URLs found in '{FEEDS_FILE}'. Add some and try again.")
+def main():
+    config = load_config(CONFIG_FILE)
+    if config is None:
+        print(f"ERROR: Failed to load configuration from '{CONFIG_FILE}'. Exiting.")
+        return
+    
+    settings = config['settings']
+    feeds = config['feeds']
+    
+    log_file = settings.get('log_file', 'news_at_12.log')
+    error_log_file = settings.get('error_log_file', 'news_errors.log')
+    log_max_bytes = settings.get('log_max_bytes', 1_000_000)
+    log_backup_count = settings.get('log_backup_count', 3)
+    db_file = settings.get('db_file', 'headlines.db')
+    html_output = settings.get('html_output', 'headlines.html')
+    json_output = settings.get('json_output', 'headlines.json')
+    max_workers = settings.get('max_workers', 10)
+    summary_limit = settings.get('summary_limit', 300)
+    auto_open_browser = settings.get('auto_open_browser', True)
+    
+    # Set up logging with config values
+    setup_logging(log_file, error_log_file, log_max_bytes, log_backup_count)
+    
+    logging.info("=" * 50)
+    logging.info("Good morning 21st century, this is your news feed app.")
+    
+    if not feeds:
+        logging.error(f"No enabled feeds found in '{CONFIG_FILE}'. Please add some and try again.")
         return
 
-    logging.info(f"Connecting to database: {DB_FILE}")
-    conn = get_db(DB_FILE)
+    logging.info(f"Connecting to database: {db_file}")
+    conn = get_db(db_file)
 
     logging.info(
-        f"Fetching {len(feed_urls)} feed(s) concurrently "
-        f"(up to {MAX_WORKERS} at a time)"
+        f"Fetching {len(feeds)} feed(s) concurrently "
+        f"(up to {max_workers} at a time)"
     )
+
+    feed_urls = [feed['url'] for feed in feeds]
 
     started_at = datetime.now().isoformat()
     t_start    = time.monotonic()
-    all_feeds  = asyncio.run(fetch_all(feed_urls, conn))
+    all_feeds  = asyncio.run(fetch_all(feed_urls, conn, max_workers, summary_limit))
     elapsed    = time.monotonic() - t_start
     finished_at = datetime.now().isoformat()
 
@@ -563,9 +615,9 @@ def main():
     conn.close()
 
     logging.info("Saving output files...")
-    save_html(all_feeds, HTML_OUTPUT, elapsed)
-    export_json(all_feeds, JSON_OUTPUT)
-    logging.info(f"Done. Logs: {LOG_FILE} | Errors: {ERROR_LOG_FILE} | DB: {DB_FILE}")
+    save_html(all_feeds, html_output, elapsed, db_file, auto_open_browser)
+    export_json(all_feeds, json_output)
+    logging.info(f"Done. Logs: {log_file} | Errors: {error_log_file} | DB: {db_file}")
 
 
 if __name__ == "__main__":

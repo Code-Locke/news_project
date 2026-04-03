@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Runs — RSS Summarizer{% endblock %}
+
+{% block content %}
+
+<!-- Page header -->
+<div class="mb-8 border-l-4 border-gb-orange pl-4">
+  <h1 class="font-mono font-bold text-2xl text-gb-fg">runs</h1>
+  <p class="text-gb-fg3 text-sm mt-1 font-mono">aggregator run history</p>
+</div>
+
+<!-- ── Trigger panel ────────────────────────────────────────────────────── -->
+<div class="bg-gb-bg1 border-2 border-gb-bg2 rounded-lg px-6 py-5 mb-8
+            flex items-center justify-between gap-6">
+
+  <div>
+    <p class="font-mono font-bold text-gb-fg text-sm">run aggregator</p>
+    <p class="font-mono text-xs text-gb-fg3 mt-1" id="trigger-hint">
+      fetches all enabled feeds and updates the database
+    </p>
+  </div>
+
+  <button id="run-btn"
+          onclick="triggerRun()"
+          class="shrink-0 font-mono font-bold text-sm px-5 py-2.5 rounded-md
+                 bg-gb-orange text-gb-bg border-2 border-gb-orange
+                 hover:bg-gb-orange-b hover:border-gb-orange-b
+                 disabled:opacity-50 disabled:cursor-not-allowed
+                 transition-colors">
+    run now
+  </button>
+</div>
+
+<!-- ── Run history table ────────────────────────────────────────────────── -->
+{% if not runs %}
+  <div class="bg-gb-bg1 border border-gb-bg2 rounded-lg p-12 text-center">
+    <p class="font-mono text-gb-fg3 text-lg">no runs recorded yet</p>
+    <p class="font-mono text-gb-fg4 text-sm mt-2">
+      press "run now" above to fetch your feeds for the first time
+    </p>
+  </div>
+
+{% else %}
+  <div class="bg-gb-bg1 border border-gb-bg2 rounded-lg overflow-hidden">
+    <table class="w-full font-mono text-sm">
+      <thead>
+        <tr class="border-b-2 border-gb-bg2 bg-gb-bg2 text-gb-fg2 text-xs uppercase tracking-wider">
+          <th class="text-left px-5 py-3">started</th>
+          <th class="text-right px-5 py-3">elapsed</th>
+          <th class="text-right px-5 py-3">feeds</th>
+          <th class="text-right px-5 py-3">failed</th>
+          <th class="text-right px-5 py-3">total</th>
+          <th class="text-right px-5 py-3">new</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr class="border-b border-gb-bg2 last:border-0
+                   hover:bg-gb-bg transition-colors">
+
+          <!-- Started at -->
+          <td class="px-5 py-3 text-gb-fg2">
+            {{ run.started_at[:16].replace('T', ' ') }}
+          </td>
+
+          <!-- Elapsed -->
+          <td class="px-5 py-3 text-right text-gb-fg3">
+            {{ "%.2f"|format(run.elapsed_sec) }}s
+          </td>
+
+          <!-- Feeds fetched -->
+          <td class="px-5 py-3 text-right text-gb-blue font-semibold">
+            {{ run.feeds_fetched }}
+          </td>
+
+          <!-- Feeds failed -->
+          <td class="px-5 py-3 text-right
+                     {% if run.feeds_failed > 0 %}text-gb-red font-semibold{% else %}text-gb-fg4{% endif %}">
+            {{ run.feeds_failed }}
+          </td>
+
+          <!-- Articles total -->
+          <td class="px-5 py-3 text-right text-gb-fg2">
+            {{ run.articles_total }}
+          </td>
+
+          <!-- Articles new -->
+          <td class="px-5 py-3 text-right">
+            {% if run.articles_new > 0 %}
+              <span class="text-gb-green font-bold">+{{ run.articles_new }}</span>
+            {% else %}
+              <span class="text-gb-fg4">0</span>
+            {% endif %}
+          </td>
+
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  const btn  = document.getElementById('run-btn');
+  const hint = document.getElementById('trigger-hint');
+
+  // Reflect initial server-side state on page load
+  {% if is_running %}
+    setRunning();
+  {% endif %}
+
+  function setRunning() {
+    btn.disabled      = true;
+    btn.textContent   = 'running…';
+    hint.textContent  = 'aggregator is running — refresh the page when the status indicator turns idle';
+  }
+
+  function setIdle() {
+    btn.disabled      = false;
+    btn.textContent   = 'run now';
+    hint.textContent  = 'fetches all enabled feeds and updates the database';
+  }
+
+  async function triggerRun() {
+    setRunning();
+    try {
+      await fetch('/run', { method: 'POST' });
+    } catch (_) {
+      // Fire-and-forget; server handles it
+    }
+  }
+
+  // Poll /status and sync button state
+  setInterval(async () => {
+    try {
+      const res  = await fetch('/status');
+      const data = await res.json();
+      if (data.running) {
+        setRunning();
+      } else {
+        setIdle();
+      }
+    } catch (_) {}
+  }, 3000);
+</script>
+{% endblock %}

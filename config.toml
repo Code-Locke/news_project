@@ -1,0 +1,101 @@
+# news_at_12 - Configuration File
+# All application settings and feed configuration in one place
+
+# Application Settings 
+
+[settings]
+# Database and output files
+db_file = "headlines.db"
+html_output = "headlines.html"
+json_output = "headlines.json"
+
+# Logging
+log_file = "news_at_12.log"
+error_log_file = "news_errors.log"
+log_max_bytes = 1_000_000      # Rotate logs at 1 MB
+log_backup_count = 3            # Keep 3 rotated copies
+
+# Fetching behavior
+summary_limit = 300             # Max characters stored/shown per summary
+max_workers = 10                # Max concurrent fetch threads
+fetch_timeout = 15              # Timeout per feed (seconds)
+
+# Browser behavior
+auto_open_browser = true        # Open HTML in browser after run
+
+
+# News Feeds
+
+[[feeds]]
+url = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+name = "New York Times"
+category = "news"
+enabled = true
+
+[[feeds]]
+url = "https://feeds.bbci.co.uk/news/rss.xml"
+name = "BBC News"
+category = "news"
+enabled = true
+
+[[feeds]]
+url = "http://feeds.reuters.com/reuters/topNews"
+name = "Reuters"
+category = "news"
+enabled = false
+
+[[feeds]]
+url = "https://www.theguardian.com/world/rss"
+name = "The Guardian"
+category = "news"
+enabled = true
+
+[[feeds]]
+url = "https://thehill.com/homenews/feed/"
+name = "The Hill"
+category = "news"
+enabled = true
+
+[[feeds]]
+url = "https://techcrunch.com/feed/"
+name = "TechCrunch"
+category = "tech"
+enabled = true
+
+[[feeds]]
+url = "https://www.theverge.com/rss/index.xml"
+name = "The Verge"
+category = "tech"
+enabled = true
+
+[[feeds]]
+url = "https://news.ycombinator.com/rss"
+name = "Hacker News"
+category = "tech"
+enabled = true
+
+[[feeds]]
+url = "https://www.wired.com/feed/rss"
+name = "Wired"
+category = "tech"
+enabled = true
+
+
+#Formula one Feeds
+[[feeds]]
+url ="http://reddit.com/r/formula1/.rss"
+name ="reddit formula 1 thread"
+category ="F1"
+enabled=true
+
+[[feeds]]
+url = "https://www.the-race.com/rss/"
+name = "The race"
+category = "F1"
+enabled=true
+
+[[feeds]]
+url = "https://www.motorsport.com/rss/f1/news/"
+name = "motorsport.com"
+category = "F1"
+enabled=true

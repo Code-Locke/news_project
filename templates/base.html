@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}RSS Summarizer{% endblock %}</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Gruvbox Light palette + custom config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // Gruvbox Light backgrounds
+            'gb-bg':      '#fbf1c7',
+            'gb-bg1':     '#ebdbb2',
+            'gb-bg2':     '#d5c4a1',
+            'gb-bg3':     '#bdae93',
+            'gb-bg4':     '#a89984',
+            // Gruvbox Light foregrounds
+            'gb-fg':      '#3c3836',
+            'gb-fg1':     '#504945',
+            'gb-fg2':     '#665c54',
+            'gb-fg3':     '#7c6f64',
+            'gb-fg4':     '#928374',
+            // Gruvbox accents
+            'gb-red':     '#cc241d',
+            'gb-green':   '#98971a',
+            'gb-yellow':  '#d79921',
+            'gb-blue':    '#458588',
+            'gb-purple':  '#b16286',
+            'gb-aqua':    '#689d6a',
+            'gb-orange':  '#d65d0e',
+            // Bright variants
+            'gb-red-b':   '#fb4934',
+            'gb-green-b': '#b8bb26',
+            'gb-yellow-b':'#fabd2f',
+            'gb-blue-b':  '#83a598',
+            'gb-purple-b':'#d3869b',
+            'gb-aqua-b':  '#8ec07c',
+            'gb-orange-b':'#fe8019',
+          },
+          fontFamily: {
+            'mono': ['"JetBrains Mono"', 'monospace'],
+            'sans': ['"Literally"', '"Atkinson Hyperlegible"', 'Georgia', 'serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    body { background-color: #fbf1c7; color: #3c3836; }
+
+    /* Subtle paper texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23fbf1c7'/%3E%3Ccircle cx='1' cy='1' r='0.5' fill='%23ebdbb2' opacity='0.4'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Status indicator pulse */
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.8); opacity: 1; }
+      100% { transform: scale(2);   opacity: 0; }
+    }
+    .status-pulse::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 9999px;
+      background: currentColor;
+      animation: pulse-ring 1.2s ease-out infinite;
+    }
+
+    /* Nav underline animation */
+    .nav-link {
+      position: relative;
+    }
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: #d79921;
+      transition: width 0.2s ease;
+    }
+    .nav-link:hover::after,
+    .nav-link.active::after {
+      width: 100%;
+    }
+
+    /* Card hover lift */
+    .card {
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(60,56,54,0.12);
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar       { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #ebdbb2; }
+    ::-webkit-scrollbar-thumb { background: #a89984; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #7c6f64; }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body class="min-h-screen font-sans relative z-10">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-50 border-b-2 border-gb-bg2"
+          style="background: rgba(235,219,178,0.92); backdrop-filter: blur(8px);">
+    <div class="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+
+      <!-- Wordmark -->
+      <a href="/" class="font-mono font-bold text-gb-fg text-lg tracking-tight
+                         hover:text-gb-orange transition-colors">
+        rss_summarizer<span class="text-gb-yellow">.py</span>
+      </a>
+
+      <!-- Nav -->
+      <nav class="flex items-center gap-6 font-mono text-sm font-semibold text-gb-fg2">
+        <a href="/"
+           class="nav-link hover:text-gb-fg transition-colors
+                  {% if request.endpoint == 'index' %}active text-gb-fg{% endif %}">
+          headlines
+        </a>
+        <a href="/feeds"
+           class="nav-link hover:text-gb-fg transition-colors
+                  {% if request.endpoint == 'feeds' %}active text-gb-fg{% endif %}">
+          feeds
+        </a>
+        <a href="/runs"
+           class="nav-link hover:text-gb-fg transition-colors
+                  {% if request.endpoint == 'runs' %}active text-gb-fg{% endif %}">
+          runs
+        </a>
+      </nav>
+
+      <!-- Status indicator -->
+      <div class="flex items-center gap-2 font-mono text-xs font-semibold select-none">
+        <span class="relative flex items-center justify-center w-3 h-3">
+          <span id="status-dot"
+                class="status-pulse relative w-3 h-3 rounded-full
+                       {% if is_running %}text-gb-orange bg-gb-orange{% else %}text-gb-green bg-gb-green{% endif %}">
+          </span>
+        </span>
+        <span id="status-label"
+              class="{% if is_running %}text-gb-orange{% else %}text-gb-aqua{% endif %}">
+          {% if is_running %}running{% else %}idle{% endif %}
+        </span>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ── Page content ────────────────────────────────────────────────────── -->
+  <main class="max-w-5xl mx-auto px-6 py-8 relative z-10">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────────────────────── -->
+  <footer class="max-w-5xl mx-auto px-6 py-6 border-t border-gb-bg2
+                 font-mono text-xs text-gb-fg4 flex justify-between items-center">
+    <span>rss_summarizer.py</span>
+    <span>SQLite · feedparser · Flask</span>
+  </footer>
+
+  <!-- ── Status polling ──────────────────────────────────────────────────── -->
+  <script>
+    const dot   = document.getElementById('status-dot');
+    const label = document.getElementById('status-label');
+
+    function applyStatus(running) {
+      if (running) {
+        dot.className   = dot.className.replace('text-gb-green bg-gb-green', '')
+                                       .replace('text-gb-orange bg-gb-orange', '');
+        dot.classList.add('text-gb-orange', 'bg-gb-orange');
+        label.className = label.className.replace('text-gb-aqua', 'text-gb-orange');
+        label.textContent = 'running';
+      } else {
+        dot.className   = dot.className.replace('text-gb-orange bg-gb-orange', '')
+                                       .replace('text-gb-green bg-gb-green', '');
+        dot.classList.add('text-gb-green', 'bg-gb-green');
+        label.className = label.className.replace('text-gb-orange', 'text-gb-aqua');
+        label.textContent = 'idle';
+      }
+    }
+
+    // Poll /status every 3 seconds
+    setInterval(async () => {
+      try {
+        const res  = await fetch('/status');
+        const data = await res.json();
+        applyStatus(data.running);
+      } catch (_) { /* silently ignore network errors */ }
+    }, 3000);
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

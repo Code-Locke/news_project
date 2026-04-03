@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Feeds — RSS Summarizer{% endblock %}
+
+{% block content %}
+
+<!-- Page header -->
+<div class="mb-8 border-l-4 border-gb-blue pl-4">
+  <h1 class="font-mono font-bold text-2xl text-gb-fg">feeds</h1>
+  <p class="text-gb-fg3 text-sm mt-1 font-mono">
+    {{ feeds|length }} sources configured
+  </p>
+</div>
+
+{% if not feeds %}
+  <div class="bg-gb-bg1 border border-gb-bg2 rounded-lg p-12 text-center">
+    <p class="font-mono text-gb-fg3 text-lg">no feeds in database yet</p>
+    <p class="font-mono text-gb-fg4 text-sm mt-2">
+      run the aggregator from the
+      <a href="/runs" class="text-gb-blue hover:text-gb-blue-b underline">runs</a>
+      page first
+    </p>
+  </div>
+
+{% else %}
+  <div class="grid gap-3">
+    {% for feed in feeds %}
+    <div class="card bg-gb-bg1 border border-gb-bg2 rounded-lg px-6 py-4
+                flex items-center justify-between gap-6">
+
+      <div class="flex-1 min-w-0">
+        <!-- Feed title -->
+        <div class="flex items-center gap-3">
+          <h2 class="font-mono font-bold text-gb-fg text-base truncate">
+            <a href="{{ feed.site_link or feed.url }}" target="_blank" rel="noopener"
+               class="hover:text-gb-orange transition-colors">
+              {{ feed.title or feed.url }}
+            </a>
+          </h2>
+        </div>
+
+        <!-- Feed URL -->
+        <p class="font-mono text-xs text-gb-fg4 mt-1 truncate">
+          {{ feed.url }}
+        </p>
+
+        <!-- Meta row -->
+        <div class="flex flex-wrap gap-x-5 mt-2 text-xs font-mono text-gb-fg3">
+          <span>
+            first seen
+            <span class="text-gb-fg2">{{ feed.first_seen[:10] }}</span>
+          </span>
+          <span>
+            last fetched
+            <span class="text-gb-fg2">{{ feed.last_fetched[:16].replace('T', ' ') }}</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Headline count badge -->
+      <div class="shrink-0 text-center">
+        <span class="block font-mono font-bold text-2xl text-gb-blue">
+          {{ feed.headline_count }}
+        </span>
+        <span class="font-mono text-xs text-gb-fg4">articles</span>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% endblock %}
