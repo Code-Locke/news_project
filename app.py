@@ -7,7 +7,8 @@ import tomllib
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, jsonify
 
-from news_at_12 import fetch_all, get_db, log_run_summary, export_json, save_html
+from news_at_12 import fetch_all, get_db, log_run_summary, export_json, save_html, load_config
+#Load config doesn't need to be here
 
 app = Flask(__name__)
 CONFIG_FILE = 'config.toml'
@@ -16,22 +17,13 @@ CONFIG_FILE = 'config.toml'
 _run_lock   = threading.Lock()
 _is_running = False  
 
-
-def load_config():
-    try:
-        with open(CONFIG_FILE, 'rb') as f:
-            config = tomllib.load(f)
-        settings     = config.get('settings', {})
-        all_feeds    = config.get('feeds', [])
-        enabled      = [fd for fd in all_feeds if fd.get('enabled', True)]
-        return settings, enabled
-    except Exception:
-        return None, None
-
-
+#Changed this part to match backend config file logic
 def get_connection():
-    settings, _ = load_config()
-    db_file = settings.get('db_file', 'headlines.db') if settings else 'headlines.db'
+    settings = load_config()
+    if settings:
+        db_file =settings['settings'].get('db_file', 'headlines.db')
+    else:
+        db_file='headlines.db'
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     return conn, db_file
@@ -39,13 +31,14 @@ def get_connection():
 
 def _run_aggregator():
     global _is_running
-
-    settings, feeds = load_config()
-    if not settings or not feeds:
+#This part also changed to match backend
+    config = load_config()
+    if not config or not config['feeds']:
         with _run_lock:
             _is_running = False
         return
-
+    settings=config['settings']
+    feeds = config['feeds']
     feed_urls        = [fd['url'] for fd in feeds]
     db_file          = settings.get('db_file', 'headlines.db')
     max_workers      = settings.get('max_workers', 10)
