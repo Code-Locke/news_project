@@ -19,7 +19,7 @@ _is_running = False
 
 #Changed this part to match backend config file logic
 def get_connection():
-    settings = load_config()
+    settings = load_config(CONFIG_FILE)
     if settings:
         db_file =settings['settings'].get('db_file', 'headlines.db')
     else:
@@ -32,7 +32,7 @@ def get_connection():
 def _run_aggregator():
     global _is_running
 #This part also changed to match backend
-    config = load_config()
+    config = load_config(CONFIG_FILE)
     if not config or not config['feeds']:
         with _run_lock:
             _is_running = False
