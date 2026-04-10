@@ -21,7 +21,7 @@ max_workers = 10                # Max concurrent fetch threads
 fetch_timeout = 15              # Timeout per feed (seconds)
 
 # Browser behavior
-auto_open_browser = true        # Open HTML in browser after run
+auto_open_browser = false        # Open HTML in browser after run
 
 
 # News Feeds
