@@ -4,22 +4,8 @@ A self-hosted RSS headline aggregator built with Python, Flask, and SQLite.
 Fetches feeds concurrently, deduplicates articles, and serves them through
 a Jinja2 frontend and a versioned REST API with Swagger documentation.
 
-<!--
-SCREENSHOTS: To add screenshots or GIFs to this README, do the following:
 
-1. Take your screenshots and save them as PNG files (e.g. headlines.png, feeds.png, runs.png, swagger.png)
-2. Create a folder in the repo: docs/screenshots/
-3. Copy your image files there
-4. Replace each placeholder block below with the correct path, like so:
-
-   ![Headlines page](docs/screenshots/headlines.png)
-
-For GIFs, record a short screen capture (Kap on macOS is good for this),
-export as GIF, and use the same process. Recommended: one GIF showing
-a run being triggered and the status indicator updating.
--->
-
-<!-- PLACEHOLDER: Add a screenshot of the headlines page here -->
+![Headlines page](docs/screenshots/headlines.png)
 
 ---
 
@@ -105,7 +91,7 @@ python app.py
 
 Then open `http://localhost:5000` in your browser.
 
-<!-- PLACEHOLDER: Add a GIF of a run being triggered and the status indicator updating here -->
+![Run trigger demo](docs/screenshots/run.gif)
 
 ---
 
@@ -116,20 +102,20 @@ Then open `http://localhost:5000` in your browser.
 All fetched articles grouped by feed, displayed as collapsible sections.
 New articles are badged NEW. Repeat articles show a seen count.
 
-<!-- PLACEHOLDER: Add a screenshot of the headlines page here -->
+![Headlines page](docs/screenshots/headlines.png)
 
 ### Feeds (`/feeds`)
 
 All configured RSS sources with article counts and last-fetched timestamps.
 
-<!-- PLACEHOLDER: Add a screenshot of the feeds page here -->
+![Headlines page](docs/screenshots/feeds.png)
 
 ### Runs (`/runs`)
 
 Full run history showing fetch time, feed counts, and new article counts.
 The "run now" button triggers a fresh fetch and polls for completion.
 
-<!-- PLACEHOLDER: Add a screenshot of the runs page here -->
+![Headlines page](docs/screenshots/runs.png)
 
 ---
 
@@ -156,7 +142,7 @@ The API is versioned under `/api/v1/`. All responses follow a consistent envelop
 
 The interactive Swagger UI is available at `/apidocs` when the app is running.
 
-<!-- PLACEHOLDER: Add a screenshot of the Swagger UI here -->
+![Headlines page](docs/screenshots/swagger.png)
 
 ---
 
