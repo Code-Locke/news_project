@@ -24,6 +24,23 @@ CONFIG_FILE = 'config.toml'
 
 #Logging
 def setup_logging(log_file, error_log_file, log_max_bytes, log_backup_count):
+    """Configure the root logger with file and console handlers.
+
+    Sets up three handlers:
+
+    - A rotating file handler writing INFO and above to ``log_file``.
+    - A rotating file handler writing ERROR and above to ``error_log_file``.
+    - A stream handler writing INFO and above to the terminal.
+
+    Both file handlers rotate at ``log_max_bytes`` and keep
+    ``log_backup_count`` backup copies so logs never grow unbounded.
+
+    Args:
+        log_file (str): Path to the main log file.
+        error_log_file (str): Path to the error-only log file.
+        log_max_bytes (int): Maximum size in bytes before a log file rotates.
+        log_backup_count (int): Number of rotated backup files to keep.
+    """
     log = logging.getLogger()
     log.setLevel(logging.DEBUG)
 
@@ -59,14 +76,46 @@ def setup_logging(log_file, error_log_file, log_max_bytes, log_backup_count):
 
 #Utilities
 def strip_html(text):
+    """Remove HTML tags from a string.
+
+    Args:
+        text (str): Raw text that may contain HTML markup.
+
+    Returns:
+        str: The input string with all HTML tags removed and whitespace
+        stripped. Returns an empty string if ``text`` is None or empty.
+    """
     return re.sub(r'<[^>]+>', '', text or '').strip()
 
 
 def url_hash(url):
+    """Return a stable SHA-256 hex digest for a URL.
+
+    Used as a unique key in the database to deduplicate headlines without
+    storing or comparing full URL strings on every insert.
+
+    Args:
+        url (str): The article URL to hash.
+
+    Returns:
+        str: A 64-character lowercase hexadecimal SHA-256 digest.
+    """
     return hashlib.sha256(url.encode('utf-8')).hexdigest()
 
 
-def parse_date(entry):    
+def parse_date(entry):
+    """Extract a publication date from a feed entry and return it as ISO-8601.
+
+    Tries ``published_parsed`` first, then falls back to ``updated_parsed``.
+    Both attributes are time-tuples supplied by feedparser.
+
+    Args:
+        entry: A feedparser entry object.
+
+    Returns:
+        str or None: An ISO-8601 datetime string (e.g. ``'2026-04-10T12:00:00'``),
+        or ``None`` if no parseable date attribute is found.
+    """
     for attr in ('published_parsed', 'updated_parsed'):
         val = getattr(entry, attr, None)
         if val:
@@ -75,6 +124,16 @@ def parse_date(entry):
 
 
 def pretty_date(iso):
+    """Format an ISO-8601 datetime string for human-readable display.
+
+    Args:
+        iso (str or None): An ISO-8601 datetime string, or ``None``.
+
+    Returns:
+        str: A formatted string such as ``'April 10, 2026  12:00'``.
+        Returns ``'Date unknown'`` if ``iso`` is falsy, or the original
+        string unchanged if it cannot be parsed.
+    """
     if not iso:
         return 'Date unknown'
     try:
@@ -84,6 +143,25 @@ def pretty_date(iso):
 
 
 def load_config(filename):
+    """Load and validate configuration from a TOML file.
+
+    Reads the file at ``filename``, checks that the required ``[settings]``
+    and ``[[feeds]]`` sections exist, and filters out any feeds whose
+    ``enabled`` key is set to ``false``.
+
+    Args:
+        filename (str): Path to the TOML configuration file.
+
+    Returns:
+        dict or None: A dict with two keys on success:
+
+        - ``'settings'`` (dict): The ``[settings]`` table from the TOML file.
+        - ``'feeds'`` (list[dict]): Only the feeds where ``enabled`` is
+          ``true`` (or omitted, which defaults to ``true``).
+
+        Returns ``None`` if the file is missing, contains invalid TOML, or
+        is missing required sections.
+    """
     try:
         with open(filename, 'rb') as f:
             config = tomllib.load(f)
@@ -122,7 +200,20 @@ def load_config(filename):
 
 
 def get_db(db_file):
-    
+    """Open (or create) the SQLite database and ensure the schema exists.
+
+    Enables WAL journal mode for better concurrent read performance and
+    creates the ``feeds``, ``headlines``, and ``runs`` tables along with
+    their indexes if they do not already exist.
+
+    Args:
+        db_file (str): Path to the SQLite database file. The file is created
+            if it does not exist.
+
+    Returns:
+        sqlite3.Connection: An open database connection with
+        ``row_factory`` set to ``sqlite3.Row`` for dict-style column access.
+    """
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')
@@ -172,7 +263,20 @@ def get_db(db_file):
 
 def log_run_summary(conn, started_at, finished_at, elapsed_sec,
                     feeds_fetched, feeds_failed, articles_total, articles_new):
-#
+    """Write a single row to the ``runs`` table summarising a completed run.
+
+    Uses its own explicit commit so it is not part of any feed transaction.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        started_at (str): ISO-8601 timestamp when the run began.
+        finished_at (str): ISO-8601 timestamp when the run completed.
+        elapsed_sec (float): Total wall-clock time for the run in seconds.
+        feeds_fetched (int): Number of feeds successfully fetched.
+        feeds_failed (int): Number of feeds that failed to fetch.
+        articles_total (int): Total number of articles processed.
+        articles_new (int): Number of articles that were new this run.
+    """
     with conn:
         conn.execute("""
             INSERT INTO runs
@@ -188,7 +292,21 @@ def log_run_summary(conn, started_at, finished_at, elapsed_sec,
 
 
 def upsert_feed(conn, url, title, site_link):
-#
+    """Insert a feed row if it does not exist, or update its metadata if it does.
+
+    Uses an ``ON CONFLICT`` clause to update ``title`` and ``last_fetched``
+    when the URL already exists. The caller is responsible for committing
+    the surrounding transaction.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        url (str): The RSS feed URL (used as the unique key).
+        title (str): The feed's display title.
+        site_link (str): The feed's associated website URL.
+
+    Returns:
+        int: The integer primary key (``id``) of the feed row.
+    """
     now = datetime.now().isoformat()
     conn.execute("""
         INSERT INTO feeds (url, title, site_link, first_seen, last_fetched)
@@ -202,6 +320,28 @@ def upsert_feed(conn, url, title, site_link):
 
 
 def upsert_headline(conn, feed_id, title, url, published, summary):
+    """Insert a headline if it is new, or bump its seen count if it already exists.
+
+    Keyed by a SHA-256 hash of the article URL so deduplication is fast and
+    does not rely on string comparisons. The caller is responsible for
+    committing the surrounding transaction.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        feed_id (int): The primary key of the parent feed row.
+        title (str): The article headline.
+        url (str): The article URL (hashed for deduplication).
+        published (str or None): ISO-8601 publication date, or ``None``.
+        summary (str): A plain-text article summary (HTML already stripped).
+
+    Returns:
+        tuple[dict, bool]: A two-element tuple containing:
+
+        - A dict of the headline row as it exists in the database after
+          the upsert.
+        - ``True`` if the headline was newly inserted, ``False`` if it
+          already existed and was updated.
+    """
     now   = datetime.now().isoformat()
     uhash = url_hash(url)
 
@@ -234,7 +374,31 @@ def upsert_headline(conn, feed_id, title, url, published, summary):
 
 
 def fetch_feed(feed_url, summary_limit=300):
-    
+    """Fetch and parse a single RSS feed. No database access.
+
+    Pure network function — safe to call from multiple threads simultaneously.
+    Strips HTML from titles and summaries, truncates summaries to
+    ``summary_limit`` characters at a word boundary, and normalises dates
+    to ISO-8601 strings.
+
+    Args:
+        feed_url (str): The RSS feed URL to fetch.
+        summary_limit (int): Maximum number of characters to keep per article
+            summary. Defaults to 300.
+
+    Returns:
+        dict or None: A dict containing raw feed metadata and parsed entries
+        on success::
+
+            {
+                'feed_url':    str,
+                'feed_title':  str,
+                'feed_link':   str,
+                'raw_entries': list[dict],  # title, url, published, summary
+            }
+
+        Returns ``None`` if the feed could not be fetched or parsed.
+    """
     t_start = time.monotonic()
     try:
         feed = feedparser.parse(feed_url, request_headers={
@@ -280,6 +444,28 @@ def fetch_feed(feed_url, summary_limit=300):
 
 
 def store_feed(conn, raw):
+    """Write the output of ``fetch_feed`` to the database.
+
+    Called sequentially — one feed at a time — so SQLite is never touched
+    by more than one thread at once. Uses a single ``with conn`` transaction
+    per feed so all writes are committed in one disk flush and any failure
+    rolls back the entire feed atomically.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        raw (dict): The dict returned by :func:`fetch_feed`.
+
+    Returns:
+        dict: A fully resolved feed dict ready for HTML/JSON rendering::
+
+            {
+                'feed_title': str,
+                'feed_url':   str,
+                'feed_link':  str,
+                'new_count':  int,
+                'entries':    list[dict],
+            }
+    """
     new_count = 0
     entries   = []
 
@@ -316,7 +502,26 @@ def store_feed(conn, raw):
 
 
 async def fetch_all(feed_urls, conn, max_workers=10, summary_limit=300):
-    
+    """Fetch all feeds concurrently, then store results sequentially.
+
+    Runs all :func:`fetch_feed` calls in a thread pool simultaneously, then
+    calls :func:`store_feed` for each result one at a time on the main thread
+    to keep SQLite writes safe.
+
+    Args:
+        feed_urls (list[str]): List of RSS feed URLs to fetch.
+        conn (sqlite3.Connection): An open database connection passed through
+            to :func:`store_feed`.
+        max_workers (int): Maximum number of concurrent fetch threads.
+            Defaults to 10.
+        summary_limit (int): Maximum characters per article summary, passed
+            through to :func:`fetch_feed`. Defaults to 300.
+
+    Returns:
+        list[dict]: A list of resolved feed dicts as returned by
+        :func:`store_feed`, one per successfully fetched feed. Failed
+        feeds are silently omitted.
+    """
     loop = asyncio.get_event_loop()
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -340,6 +545,16 @@ async def fetch_all(feed_urls, conn, max_workers=10, summary_limit=300):
 
 
 def export_json(all_feeds, filename):
+    """Write a clean JSON snapshot of all feeds and articles to disk.
+
+    The output is structured for easy LLM ingestion, including only
+    human-readable fields (no internal database IDs or hashes).
+
+    Args:
+        all_feeds (list[dict]): The list of resolved feed dicts returned
+            by :func:`fetch_all`.
+        filename (str): Path to the output JSON file. Created or overwritten.
+    """
     payload = {
         'generated_at':   datetime.now().isoformat(),
         'feed_count':     len(all_feeds),
@@ -369,6 +584,23 @@ def export_json(all_feeds, filename):
 
 
 def build_html(all_feeds, elapsed_seconds, db_file="headlines.db"):
+    """Render all feeds and their headlines to a self-contained HTML string.
+
+    Produces a styled, responsive HTML page with per-feed cards, NEW/repeat
+    badges, clickable article links, and a summary header. No external
+    dependencies — all CSS is inlined.
+
+    Args:
+        all_feeds (list[dict]): The list of resolved feed dicts returned
+            by :func:`fetch_all`.
+        elapsed_seconds (float): Total fetch duration, displayed in the
+            page header.
+        db_file (str): Path to the database file, displayed in the footer.
+            Defaults to ``'headlines.db'``.
+
+    Returns:
+        str: A complete HTML document as a string.
+    """
     feed_cards = ''
     for feed in all_feeds:
         entries_html = ''
@@ -538,6 +770,19 @@ def build_html(all_feeds, elapsed_seconds, db_file="headlines.db"):
 
 
 def save_html(all_feeds, filename, elapsed_seconds, db_file, auto_open_browser=True):
+    """Write the rendered HTML to disk and optionally open it in the browser.
+
+    Args:
+        all_feeds (list[dict]): The list of resolved feed dicts returned
+            by :func:`fetch_all`.
+        filename (str): Path to the output HTML file. Created or overwritten.
+        elapsed_seconds (float): Total fetch duration passed through to
+            :func:`build_html` for display in the page header.
+        db_file (str): Database file path passed through to :func:`build_html`
+            for display in the page footer.
+        auto_open_browser (bool): If ``True``, opens the saved file in the
+            default web browser after writing. Defaults to ``True``.
+    """
     with open(filename, 'w', encoding='utf-8') as fh:
         fh.write(build_html(all_feeds, elapsed_seconds, db_file))
     logging.info(f"HTML saved -> {filename}")
@@ -546,6 +791,12 @@ def save_html(all_feeds, filename, elapsed_seconds, db_file, auto_open_browser=T
 
 
 def main():
+    """Entry point for running the aggregator as a standalone script.
+
+    Loads configuration from ``config.toml``, sets up logging, connects to
+    the database, fetches all enabled feeds concurrently, stores results,
+    logs the run summary, and writes HTML and JSON output files.
+    """
     config = load_config(CONFIG_FILE)
     if config is None:
         print(f"ERROR: Failed to load configuration from '{CONFIG_FILE}'. Exiting.")
