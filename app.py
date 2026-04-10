@@ -4,8 +4,10 @@ import threading
 import logging
 import asyncio
 import tomllib
+import time
+#Moved import to front
 from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, jsonify
+from flask import Flask, render_template, jsonify
 
 from news_at_12 import fetch_all, get_db, log_run_summary, export_json, save_html, load_config
 #Load config doesn't need to be here
@@ -43,11 +45,11 @@ def _run_aggregator():
     db_file          = settings.get('db_file', 'headlines.db')
     max_workers      = settings.get('max_workers', 10)
     summary_limit    = settings.get('summary_limit', 300)
-    html_output      = settings.get('html_output', 'headlines.html')
+    #html_output      = settings.get('html_output', 'headlines.html')
     json_output      = settings.get('json_output', 'headlines.json')
     auto_open        = False  
 
-    import time
+    
     conn        = get_db(db_file)
     started_at  = datetime.now().isoformat()
     t_start     = time.monotonic()
@@ -57,7 +59,7 @@ def _run_aggregator():
     except Exception:
         #This was eating up the news_at_12 script's errors.
         #If the script dies, no errors would be shown.
-        logging.exception("We've got some news for you, coming right up, news_at_12 died")
+        logging.exception(f"We've got some news for you, coming right up,\n news_at_12 has been found dead")
         all_feeds_data = []
 
     elapsed     = time.monotonic() - t_start
@@ -80,7 +82,7 @@ def _run_aggregator():
 
     conn.close()
 
-    save_html(all_feeds_data, html_output, elapsed, db_file, auto_open_browser=auto_open)
+    #save_html(all_feeds_data, html_output, elapsed, db_file, auto_open_browser=auto_open)
     export_json(all_feeds_data, json_output)
 
     with _run_lock:

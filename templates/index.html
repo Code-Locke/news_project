@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Headlines — RSS Summarizer{% endblock %}
+{% block title %}Headlines — News_at_12{% endblock %}
 
 {% block content %}
 
@@ -26,61 +26,66 @@
 {% else %}
   {% for group in feed_groups %}
 
-    <!-- Feed group header -->
-    <div class="{% if not loop.first %}mt-8{% endif %} mb-3 flex items-baseline gap-3">
-      <h2 class="font-mono font-bold text-gb-fg text-base">
-        <a href="{{ group.site_link or group.feed_url }}" target="_blank" rel="noopener"
-           class="hover:text-gb-orange transition-colors">
-          {{ group.feed_title }}
-        </a>
-      </h2>
-      <span class="text-gb-fg4 text-xs font-mono truncate">{{ group.feed_url }}</span>
-      <span class="text-gb-fg4 text-xs font-mono ml-auto shrink-0">
-        {{ group.articles|length }} articles
-      </span>
-    </div>
-
-    <!-- Articles for this feed -->
-    <div class="flex flex-col gap-2">
-      {% for h in group.articles %}
-      <article class="card bg-gb-bg1 border border-gb-bg2 rounded-md px-5 py-3
-                      flex items-start gap-4">
-
-        <!-- NEW / seen badge -->
-        {% if h.seen_count == 1 %}
-          <span class="mt-0.5 shrink-0 font-mono text-xs font-bold px-2 py-0.5
-                       rounded bg-gb-green text-gb-bg">NEW</span>
-        {% else %}
-          <span class="mt-0.5 shrink-0 font-mono text-xs font-semibold px-2 py-0.5
-                       rounded bg-gb-bg2 text-gb-fg3">{{ h.seen_count }}×</span>
-        {% endif %}
-
-        <div class="flex-1 min-w-0">
-          <a href="{{ h.url }}" target="_blank" rel="noopener"
-             class="font-sans font-bold text-gb-fg hover:text-gb-blue
-                    transition-colors leading-snug block">
-            {{ h.title }}
+    <!-- Collapsible feed group -->
+    <details class="{% if not loop.first %}mt-4{% endif %} group">
+      <summary class="flex items-baseline gap-3 mb-3 cursor-pointer list-none
+                      hover:text-gb-orange transition-colors">
+        <h2 class="font-mono font-bold text-gb-fg text-base">
+          <a href="{{ group.site_link or group.feed_url }}" target="_blank" rel="noopener"
+             class="hover:text-gb-orange transition-colors"
+             onclick="event.stopPropagation()">
+            {{ group.feed_title }}
           </a>
+        </h2>
+        <span class="text-gb-fg4 text-xs font-mono truncate">{{ group.feed_url }}</span>
+        <span class="text-gb-fg4 text-xs font-mono ml-auto shrink-0">
+          {{ group.articles|length }} articles
+        </span>
+      </summary>
 
-          <div class="flex flex-wrap gap-x-4 mt-1 text-xs font-mono text-gb-fg4">
-            {% if h.published %}
-              <span>{{ h.published[:16].replace('T', ' ') }}</span>
-            {% endif %}
-            {% if h.seen_count > 1 %}
-              <span>first seen {{ h.first_seen[:16].replace('T', ' ') }}</span>
+      <!-- Articles for this feed -->
+      <div class="flex flex-col gap-2">
+        {% for h in group.articles %}
+        <article class="card bg-gb-bg1 border border-gb-bg2 rounded-md px-5 py-3
+                        flex items-start gap-4">
+
+          <!-- NEW / seen badge -->
+          {% if h.seen_count == 1 %}
+            <span class="mt-0.5 shrink-0 font-mono text-xs font-bold px-2 py-0.5
+                         rounded bg-gb-green text-gb-bg">NEW</span>
+          {% else %}
+            <span class="mt-0.5 shrink-0 font-mono text-xs font-semibold px-2 py-0.5
+                         rounded bg-gb-bg2 text-gb-fg3">{{ h.seen_count }}×</span>
+          {% endif %}
+
+          <div class="flex-1 min-w-0">
+            <a href="{{ h.url }}" target="_blank" rel="noopener"
+               class="font-sans font-bold text-gb-fg hover:text-gb-blue
+                      transition-colors leading-snug block">
+              {{ h.title }}
+            </a>
+
+            <div class="flex flex-wrap gap-x-4 mt-1 text-xs font-mono text-gb-fg4">
+              {% if h.published %}
+                <span>{{ h.published[:16].replace('T', ' ') }}</span>
+              {% endif %}
+              {% if h.seen_count > 1 %}
+                <span>first seen {{ h.first_seen[:16].replace('T', ' ') }}</span>
+              {% endif %}
+            </div>
+
+            {% if h.summary %}
+              <p class="mt-2 text-sm text-gb-fg2 leading-relaxed line-clamp-2">
+                {{ h.summary }}
+              </p>
             {% endif %}
           </div>
 
-          {% if h.summary %}
-            <p class="mt-2 text-sm text-gb-fg2 leading-relaxed line-clamp-2">
-              {{ h.summary }}
-            </p>
-          {% endif %}
-        </div>
+        </article>
+        {% endfor %}
+      </div>
 
-      </article>
-      {% endfor %}
-    </div>
+    </details>
 
   {% endfor %}
 {% endif %}

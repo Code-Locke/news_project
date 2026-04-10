@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Runs — RSS Summarizer{% endblock %}
+{% block title %}Runs — News_at_12{% endblock %}
 
 {% block content %}
 
 <!-- Page header -->
 <div class="mb-8 border-l-4 border-gb-orange pl-4">
   <h1 class="font-mono font-bold text-2xl text-gb-fg">runs</h1>
-  <p class="text-gb-fg3 text-sm mt-1 font-mono">aggregator run history</p>
+  <p class="text-gb-fg3 text-sm mt-1 font-mono">Newsman run history</p>
 </div>
 
 <!-- ── Trigger panel ────────────────────────────────────────────────────── -->
@@ -109,15 +109,16 @@
   const btn  = document.getElementById('run-btn');
   const hint = document.getElementById('trigger-hint');
 
-  // Reflect initial server-side state on page load
-  {% if is_running %}
-    setRunning();
-  {% endif %}
+  // Reflect initial state on page load without waiting for first interval tick
+  fetch('/status')
+    .then(r => r.json())
+    .then(data => data.running ? setRunning() : setIdle())
+    .catch(() => {});
 
   function setRunning() {
     btn.disabled      = true;
     btn.textContent   = 'running…';
-    hint.textContent  = 'aggregator is running — refresh the page when the status indicator turns idle';
+    hint.textContent  = 'Newsman is checking — refresh the page when the status indicator turns idle';
   }
 
   function setIdle() {
